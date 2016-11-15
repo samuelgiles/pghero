@@ -31,6 +31,30 @@ module PgHero
       @db_instance_identifier ||= @config["db_instance_identifier"]
     end
 
+    def capture_query_stats?
+      config["capture_query_stats"] != false
+    end
+
+    def cache_hit_rate_threshold
+      (config["cache_hit_rate_threshold"] || PgHero.config["cache_hit_rate_threshold"] || PgHero.cache_hit_rate_threshold).to_i
+    end
+
+    def total_connections_threshold
+      (config["total_connections_threshold"] || PgHero.config["total_connections_threshold"] || PgHero.total_connections_threshold).to_i
+    end
+
+    def slow_query_ms
+      (config["slow_query_ms"] || PgHero.config["slow_query_ms"] || PgHero.slow_query_ms).to_i
+    end
+
+    def slow_query_calls
+      (config["slow_query_calls"] || PgHero.config["slow_query_calls"] || PgHero.slow_query_calls).to_i
+    end
+
+    def long_running_query_sec
+      (config["long_running_query_sec"] || PgHero.config["long_running_query_sec"] || PgHero.long_running_query_sec).to_i
+    end
+
     private
 
     def connection_model

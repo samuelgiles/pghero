@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title><%= [@databases.size > 1 ? @current_database.name : "PgHero", @title].compact.join(" / ") %></title>
+    <title><%= [@databases.size > 1 ? @database.name : "PgHero", @title].compact.join(" / ") %></title>
 
     <meta charset="utf-8" />
     <%= stylesheet_link_tag "pghero/application" %>
@@ -24,7 +24,7 @@
       <div class="grid">
         <div class="col-3-12">
           <% if @databases.size > 1 %>
-            <p class="nav-header"><%= @current_database.name %></p>
+            <p class="nav-header"><%= @database.name %></p>
           <% end %>
 
           <ul class="nav">
@@ -36,7 +36,6 @@
             <% if @query_stats_enabled %>
               <li class="<%= controller.action_name == "queries" ? "active" : "" %>"><%= link_to "Queries", queries_path %></li>
             <% end %>
-            <li class="<%= controller.action_name == "index_usage" ? "active" : "" %>"><%= link_to "Index Usage", index_usage_path %></li>
             <li class="<%= controller.action_name == "space" ? "active" : "" %>"><%= link_to "Space", space_path %></li>
             <li class="<%= controller.action_name == "connections" ? "active" : "" %>"><%= link_to "Connections", connections_path %></li>
             <li class="<%= controller.action_name == "live_queries" ? "active" : "" %>"><%= link_to "Live Queries", live_queries_path %></li>
@@ -49,7 +48,7 @@
             <p class="nav-header">Databases</p>
             <ul class="nav">
               <% @databases.each do |database| %>
-                <li class="<%= ("active-database" if PgHero.current_database == database.id) %>">
+                <li class="<%= ("active-database" if @database.id == database.id) %>">
                   <%= link_to database.name, database: database.id %>
                 </li>
               <% end %>

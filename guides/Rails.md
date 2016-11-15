@@ -1,9 +1,5 @@
 # PgHero for Rails
 
-:gem:
-
-## Installation
-
 Add this line to your application’s Gemfile:
 
 ```ruby
@@ -27,100 +23,6 @@ gem 'pg_query'
 ```
 
 and make sure [query stats](#query-stats) are enabled. Read about how it works [here](Suggested-Indexes.md).
-
-## Insights
-
-```ruby
-PgHero.running_queries
-PgHero.long_running_queries
-PgHero.index_usage
-PgHero.invalid_indexes
-PgHero.missing_indexes
-PgHero.unused_indexes
-PgHero.unused_tables
-PgHero.database_size
-PgHero.relation_sizes
-PgHero.index_hit_rate
-PgHero.table_hit_rate
-PgHero.total_connections
-PgHero.locks
-```
-
-Kill queries
-
-```ruby
-PgHero.kill(pid)
-PgHero.kill_long_running_queries
-PgHero.kill_all
-```
-
-Query stats
-
-```ruby
-PgHero.query_stats_enabled?
-PgHero.enable_query_stats
-PgHero.disable_query_stats
-PgHero.reset_query_stats
-PgHero.query_stats
-PgHero.slow_queries
-```
-
-Suggested indexes
-
-```ruby
-PgHero.suggested_indexes
-PgHero.best_index(query)
-```
-
-Security
-
-```ruby
-PgHero.ssl_used?
-```
-
-Replication
-
-```ruby
-PgHero.replica?
-PgHero.replication_lag
-```
-
-## Users
-
-**Note:** It’s unsafe to pass user input to these commands.
-
-Create a user
-
-```ruby
-PgHero.create_user("link")
-# {password: "zbTrNHk2tvMgNabFgCo0ws7T"}
-```
-
-This generates and returns a secure password.  The user has full access to the `public` schema.
-
-Read-only access
-
-```ruby
-PgHero.create_user("epona", readonly: true)
-```
-
-Set the password
-
-```ruby
-PgHero.create_user("zelda", password: "hyrule")
-```
-
-Grant access to only certain tables
-
-```ruby
-PgHero.create_user("navi", tables: ["triforce"])
-```
-
-Drop a user
-
-```ruby
-PgHero.drop_user("ganondorf")
-```
 
 ## Security
 
@@ -210,12 +112,6 @@ production:
   <<: *default
 ```
 
-Specify a database with:
-
-```ruby
-PgHero.with(:replica) { PgHero.running_queries }
-```
-
 ## Customize
 
 Minimum time for long running queries
@@ -242,7 +138,117 @@ Minimum connections for high connections warning
 PgHero.total_connections_threshold = 100 # default
 ```
 
+## Methods
+
+Insights
+
+```ruby
+PgHero.running_queries
+PgHero.long_running_queries
+PgHero.index_usage
+PgHero.invalid_indexes
+PgHero.missing_indexes
+PgHero.unused_indexes
+PgHero.unused_tables
+PgHero.database_size
+PgHero.relation_sizes
+PgHero.index_hit_rate
+PgHero.table_hit_rate
+PgHero.total_connections
+PgHero.locks
+```
+
+Kill queries
+
+```ruby
+PgHero.kill(pid)
+PgHero.kill_long_running_queries
+PgHero.kill_all
+```
+
+Query stats
+
+```ruby
+PgHero.query_stats_enabled?
+PgHero.enable_query_stats
+PgHero.disable_query_stats
+PgHero.reset_query_stats
+PgHero.query_stats
+PgHero.slow_queries
+```
+
+Suggested indexes
+
+```ruby
+PgHero.suggested_indexes
+PgHero.best_index(query)
+```
+
+Security
+
+```ruby
+PgHero.ssl_used?
+```
+
+Replication
+
+```ruby
+PgHero.replica?
+PgHero.replication_lag
+```
+
+If you have multiple databases, specify a database with:
+
+```ruby
+PgHero.databases["db2"].running_queries
+```
+
+## Users
+
+**Note:** It’s unsafe to pass user input to these commands.
+
+Create a user
+
+```ruby
+PgHero.create_user("link")
+# {password: "zbTrNHk2tvMgNabFgCo0ws7T"}
+```
+
+This generates and returns a secure password.  The user has full access to the `public` schema.
+
+Read-only access
+
+```ruby
+PgHero.create_user("epona", readonly: true)
+```
+
+Set the password
+
+```ruby
+PgHero.create_user("zelda", password: "hyrule")
+```
+
+Grant access to only certain tables
+
+```ruby
+PgHero.create_user("navi", tables: ["triforce"])
+```
+
+Drop a user
+
+```ruby
+PgHero.drop_user("ganondorf")
+```
+
 ## Upgrading
+
+### 1.5.0
+
+For query stats grouping by user, create a migration with:
+
+```ruby
+add_column :pghero_query_stats, :user, :text
+```
 
 ### 1.3.0
 

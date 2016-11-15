@@ -1,16 +1,17 @@
 module PgHero
   module Methods
     module Queries
-      def running_queries
+      def running_queries(options = {})
+        min_duration = options[:min_duration]
         select_all <<-SQL
           SELECT
             pid,
             state,
             application_name AS source,
-            age(now(), xact_start) AS duration,
-            waiting,
+            age(NOW(), COALESCE(query_start, xact_start)) AS duration,
+            #{server_version_num >= 90600 ? "(wait_event IS NOT NULL) AS waiting" : "waiting"},
             query,
-            xact_start AS started_at,
+            COALESCE(query_start, xact_start) AS started_at,
             usename AS user
           FROM
             pg_stat_activity
@@ -19,38 +20,19 @@ module PgHero
             AND state <> 'idle'
             AND pid <> pg_backend_pid()
             AND datname = current_database()
+            #{min_duration ? "AND NOW() - COALESCE(query_start, xact_start) > interval '#{min_duration.to_i} seconds'" : nil}
           ORDER BY
-            query_start DESC
+            COALESCE(query_start, xact_start) DESC
         SQL
       end
 
       def long_running_queries
-        select_all <<-SQL
-          SELECT
-            pid,
-            state,
-            application_name AS source,
-            age(now(), xact_start) AS duration,
-            waiting,
-            query,
-            xact_start AS started_at,
-            usename AS user
-          FROM
-            pg_stat_activity
-          WHERE
-            query <> '<insufficient privilege>'
-            AND state <> 'idle'
-            AND pid <> pg_backend_pid()
-            AND now() - query_start > interval '#{PgHero.long_running_query_sec.to_i} seconds'
-            AND datname = current_database()
-          ORDER BY
-            query_start DESC
-        SQL
+        running_queries(min_duration: long_running_query_sec)
       end
 
       def slow_queries(options = {})
         query_stats = options[:query_stats] || self.query_stats(options.except(:query_stats))
-        query_stats.select { |q| q["calls"].to_i >= PgHero.slow_query_calls.to_i && q["average_time"].to_i >= PgHero.slow_query_ms.to_i }
+        query_stats.select { |q| q["calls"].to_i >= slow_query_calls.to_i && q["average_time"].to_i >= slow_query_ms.to_i }
       end
 
       def locks
@@ -75,28 +57,37 @@ module PgHero
       end
 
       # from https://wiki.postgresql.org/wiki/Lock_Monitoring
+      # and http://big-elephants.com/2013-09/exploring-query-locks-in-postgres/
       def blocked_queries
         select_all <<-SQL
           SELECT
-            bl.pid AS blocked_pid,
-            a.usename AS blocked_user,
-            ka.query AS current_or_recent_query_in_blocking_process,
-            ka.state AS state_of_blocking_process,
-            age(now(), ka.query_start) AS blocking_duration,
-            kl.pid AS blocking_pid,
-            ka.usename AS blocking_user,
-            a.query AS blocked_query,
-            age(now(), a.query_start) AS blocked_duration
+            COALESCE(blockingl.relation::regclass::text,blockingl.locktype) as locked_item,
+            blockeda.pid AS blocked_pid,
+            blockeda.usename AS blocked_user,
+            blockeda.query as blocked_query,
+            age(now(), blockeda.query_start) AS blocked_duration,
+            blockedl.mode as blocked_mode,
+            blockinga.pid AS blocking_pid,
+            blockinga.usename AS blocking_user,
+            blockinga.state AS state_of_blocking_process,
+            blockinga.query AS current_or_recent_query_in_blocking_process,
+            age(now(), blockinga.query_start) AS blocking_duration,
+            blockingl.mode as blocking_mode
           FROM
-            pg_catalog.pg_locks bl
-          JOIN
-            pg_catalog.pg_stat_activity a ON a.pid = bl.pid
-          JOIN
-            pg_catalog.pg_locks kl ON kl.transactionid = bl.transactionid AND kl.pid != bl.pid
-          JOIN
-            pg_catalog.pg_stat_activity ka ON ka.pid = kl.pid
+            pg_catalog.pg_locks blockedl
+          LEFT JOIN
+            pg_stat_activity blockeda ON blockedl.pid = blockeda.pid
+          LEFT JOIN
+            pg_catalog.pg_locks blockingl ON blockedl.pid != blockingl.pid AND (
+              blockingl.transactionid = blockedl.transactionid
+              OR (blockingl.relation = blockedl.relation AND blockingl.locktype = blockedl.locktype)
+            )
+          LEFT JOIN
+            pg_stat_activity blockinga ON blockingl.pid = blockinga.pid AND blockinga.datid = blockeda.datid
           WHERE
-            NOT bl.GRANTED
+            NOT blockedl.granted
+            AND blockeda.query <> '<insufficient privilege>'
+            AND blockeda.datname = current_database()
           ORDER BY
             blocked_duration DESC
         SQL

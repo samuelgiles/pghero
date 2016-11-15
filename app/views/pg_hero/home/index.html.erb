@@ -16,16 +16,18 @@
       No long running queries
     <% end %>
   </div>
-  <div class="alert alert-<%= @good_cache_rate ? "success" : "warning" %>">
-    <% if @good_cache_rate %>
-      Cache hit rate above <%= PgHero.cache_hit_rate_threshold %>%
-    <% else %>
-      Low cache hit rate
-    <% end %>
-  </div>
+  <% if @extended %>
+    <div class="alert alert-<%= @good_cache_rate ? "success" : "warning" %>">
+      <% if @good_cache_rate %>
+        Cache hit rate above <%= @database.cache_hit_rate_threshold %>%
+      <% else %>
+        Low cache hit rate
+      <% end %>
+    </div>
+  <% end %>
   <div class="alert alert-<%= @good_total_connections ? "success" : "warning" %>">
     <% if @good_total_connections %>
-      Healthy number of connections
+      Number of connections healthy
     <% else %>
       High number of connections
     <% end %>
@@ -42,7 +44,7 @@
     <% if @sequence_danger.any? %>
       <%= pluralize(@sequence_danger.size, "columns") %> approaching overflow
     <% else %>
-      No columns near overflow
+      No columns near integer overflow
     <% end %>
   </div>
   <div class="alert alert-<%= @invalid_indexes.empty? ? "success" : "warning" %>">
@@ -61,20 +63,12 @@
       <% end %>
     </div>
   <% end %>
-  <% if PgHero.suggested_indexes_enabled? %>
+  <% if @database.suggested_indexes_enabled? %>
     <div class="alert alert-<%= @suggested_indexes.empty? ? "success" : "warning" %>">
       <% if @suggested_indexes.any? %>
         <%= pluralize(@suggested_indexes.size, "suggested index", "suggested indexes") %>
       <% else %>
         No suggested indexes
-      <% end %>
-    </div>
-  <% else %>
-    <div class="alert alert-<%= @missing_indexes.empty? ? "success" : "warning" %>">
-      <% if @missing_indexes.any? %>
-        <%= pluralize(@missing_indexes.size, "table appears", "tables appear") %> to be missing indexes
-      <% else %>
-        No missing indexes
       <% end %>
     </div>
   <% end %>
@@ -106,7 +100,7 @@
   </div>
 <% end %>
 
-<% if !@good_cache_rate %>
+<% if @extended && !@good_cache_rate %>
   <div class="content">
     <h1>Low Cache Hit Rate</h1>
 
@@ -126,7 +120,7 @@
 <% if !@good_total_connections %>
   <div class="content">
     <h1>High Number of Connections</h1>
-    <%= render partial: "connections_table", locals: {total_connections: @total_connections, connection_sources: PgHero.connection_sources(by_database_and_user: true).first(10), show_message: true} %>
+    <%= render partial: "connections_table", locals: {total_connections: @total_connections, connection_sources: @database.connection_sources(by_database_and_user: true).first(10), show_message: true} %>
   </div>
 <% end %>
 
@@ -135,7 +129,7 @@
     <h2>Vacuuming Needed</h2>
     <p>The database <strong>will shutdown</strong> when there are fewer than 1,000,000 transactions left. <%= link_to "Read more", "http://www.postgresql.org/docs/9.1/static/routine-vacuuming.html#VACUUM-FOR-WRAPAROUND", target: "_blank" %>.</p>
     <p>For each table, run:</p>
-    <code><pre>VACUUM FREEZE VERBOSE table</pre></code>
+    <code><pre>VACUUM FREEZE VERBOSE table;</pre></code>
     <table class="table">
       <thead>
         <tr>
@@ -270,11 +264,13 @@ remove_index <%= query["unneeded_index"]["table"].to_sym.inspect %>, name: <%= q
     <div id="migration3" style="display: none;">
       <pre>rails g migration add_suggested_indexes</pre>
       <p>And paste</p>
-      <pre style="overflow: scroll; white-space: pre; word-break: normal;"><% @suggested_indexes.each do |index| %>
-<% if index[:using] == "gist" %>
+      <pre style="overflow: scroll; white-space: pre; word-break: normal;">commit_db_transaction
+<% @suggested_indexes.each do |index| %>
+<% if index[:using] && index[:using] != "btree" %>
 connection.execute("CREATE INDEX CONCURRENTLY ON <%= index[:table] %><% if index[:using] %> USING <%= index[:using] %><% end %> (<%= index[:columns].join(", ") %>)")
 <% else %>
-add_index <%= index[:table].to_sym.inspect %>, [<%= index[:columns].map(&:to_sym).map(&:inspect).join(", ") %>], algorithm: :concurrently<% end %><% end %></pre>
+add_index <%= index[:table].to_sym.inspect %>, [<%= index[:columns].map(&:to_sym).map(&:inspect).join(", ") %>], algorithm: :concurrently<% end %>
+<% end %></pre>
     </div>
 
     <% @suggested_indexes.each_with_index do |index, i| %>
@@ -283,33 +279,6 @@ add_index <%= index[:table].to_sym.inspect %>, [<%= index[:columns].map(&:to_sym
       <p>to speed up</p>
       <%= render partial: "queries_table", locals: {queries: index[:queries].map { |q| @query_stats_by_query[q] }, suggested_indexes: false} %>
     <% end %>
-  </div>
-<% end %>
-
-<% if @missing_indexes.any? %>
-  <div class="content">
-    <h1>Missing Indexes</h1>
-
-    <p>These tables have a large number of rows but indexes are not used often. Add indexes for faster queries.</p>
-
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Table</th>
-          <th>% of Time Index Used</th>
-          <th>Rows in Table</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% @missing_indexes.each do |query| %>
-          <tr>
-            <td><%= query["table"] %></td>
-            <td style="width: 30%;"><%= query["percent_of_times_index_used"] %></td>
-            <td style="width: 20%;"><%= number_with_delimiter(query["rows_in_table"]) %></td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
   </div>
 <% end %>
 
@@ -335,7 +304,7 @@ pg_stat_statements.track = all</pre>
   <div class="content">
     <h1>Slow Queries</h1>
 
-    <p>Slow queries take <%= PgHero.slow_query_ms %> ms or more on average and have been called at least <%= PgHero.slow_query_calls %> times.</p>
+    <p>Slow queries take <%= @database.slow_query_ms %> ms or more on average and have been called at least <%= @database.slow_query_calls %> times.</p>
     <p><%= link_to "Explain queries", explain_path %> to see where to add indexes.</p>
 
     <%= render partial: "queries_table", locals: {queries: @slow_queries} %>

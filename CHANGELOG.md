@@ -1,6 +1,38 @@
-## 1.5.0 [unreleased]
+## 1.6.2
 
+- Suggest GiST over GIN for `LIKE` queries again (seeing better performance)
+
+## 1.6.1
+
+- Suggest GIN over GiST for `LIKE` queries
+
+## 1.6.0
+
+- Removed mostly inactionable items (cache hit rate and index usage)
+- Restored duplicate indexes to homepage
+- Fixed issue with exact duplicate indexes
+- Way better `blocked_queries` method
+
+## 1.5.3
+
+- Fixed Rails 5 error with multiple databases
+- Fixed duplicate index detection with expressions
+
+## 1.5.2
+
+- Added support for PostgreSQL 9.6
+- Fixed incorrect query start for live queries in transactions
+
+## 1.5.1
+
+- Better tune page for PostgreSQL 9.5
+
+## 1.5.0
+
+- Added user to query stats (opt-in)
+- Added user to connection sources
 - Added `capture_space_stats` method and rake task
+- Added visualize button to explain page
 - Better charts for system stats
 
 ## 1.4.2
